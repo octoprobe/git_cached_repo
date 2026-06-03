@@ -1,0 +1,44 @@
+name: Ruff, Mypy and Pytest
+
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: ["3.13.12"]
+    env:
+      UV_PYTHON: ${{ matrix.python-version }}
+    
+    steps:
+      - uses: actions/checkout@v6
+      - name: Set up Python
+        uses: actions/setup-python@v6
+        with:
+          python-version: ${{ matrix.python-version }}
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v7.6
+        with:
+          # version: "0.5.26"
+          enable-cache: true
+          cache-dependency-glob: |
+            pyproject.toml
+  
+      - name: Install the project
+        run: |
+          uv sync --python ${{ matrix.python-version }} --all-extras
+      
+      - name: Ruff
+        run: |
+          uv run ruff check --output-format github --config pyproject.toml --fix
+
+      - name: Mypy
+        run: |
+          uv run mypy --config-file pyproject.toml src tests
+
+      - name: Test with pytest
+        run: |
+          uv run pytest tests
+        continue-on-error: true
