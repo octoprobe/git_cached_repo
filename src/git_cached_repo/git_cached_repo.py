@@ -109,13 +109,13 @@ This pattern is used to distinquish a branch from a commit hash.
 """
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, repr=True)
 class MetadataGitCommand:
     command: str
     stdout: str
 
 
-@dataclasses.dataclass(frozen=True)
+@dataclasses.dataclass(frozen=True, repr=True)
 class GitMetadata:
     git_spec: str
     url_link: str

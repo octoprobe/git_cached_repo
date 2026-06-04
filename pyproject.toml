@@ -122,6 +122,7 @@ addopts = [
   "--ignore=docs"
 ]
 markers = [
+    "internet: tests that access real internet resources (deselect with '-m \"not internet\"')",
     "live: Test on real usb hubs",
     "slow: marks tests as slow (deselect with '-m \"not slow\"')",
     "required_futs: ..."

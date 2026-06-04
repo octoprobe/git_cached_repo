@@ -10,7 +10,7 @@ from git_cached_repo.git_cached_repo import GitSpec
 DIRECTORY_OF_THIS_FILE = pathlib.Path(__file__).parent
 
 
-@dataclasses.dataclass
+@dataclasses.dataclass(frozen=True, repr=True)
 class Ttestparam:
     spec: str
 

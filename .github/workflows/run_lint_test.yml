@@ -40,5 +40,5 @@ jobs:
 
       - name: Test with pytest
         run: |
-          uv run pytest tests
+          uv run pytest -m "not internet" tests
         continue-on-error: true
