@@ -84,6 +84,14 @@ _TESTPARAM_B = Ttestparam(
     expected_command_describe="heads/pr-17232-0-",
 )
 _TESTPARAM_C = Ttestparam(
+    spec="https://github.com/micropython/micropython.git@f498a16",
+    submodules=False,
+    expected_url_link="https://github.com/micropython/micropython/tree/f498a16",
+    expected_commit_hash_short="f498a16",
+    expected_rebased=False,
+    expected_command_describe="tags/v1.25.0-0-gf498a16c7d",
+)
+_TESTPARAM_D = Ttestparam(
     spec="https://github.com/micropython/micropython.git@v1.25.0",
     submodules=False,
     expected_url_link="https://github.com/micropython/micropython/tree/v1.25.0",
@@ -91,7 +99,7 @@ _TESTPARAM_C = Ttestparam(
     expected_rebased=False,
     expected_command_describe="tags/v1.25.0-0-gf498a16",
 )
-_TESTPARAM_D = Ttestparam(
+_TESTPARAM_E = Ttestparam(
     spec="https://github.com/micropython/micropython.git@v1.25.0",
     submodules=True,
     expected_url_link="https://github.com/micropython/micropython/tree/v1.25.0",
@@ -99,7 +107,7 @@ _TESTPARAM_D = Ttestparam(
     expected_rebased=False,
     expected_command_describe="tags/v1.25.0-0-gf498a16",
 )
-_TESTPARAM_E = Ttestparam(
+_TESTPARAM_F = Ttestparam(
     spec="https://github.com/micropython/micropython.git~17113@v1.25.0",
     submodules=False,
     expected_url_link="https://github.com/micropython/micropython/pull/17113",
@@ -113,6 +121,7 @@ _TESTPARAMS = [
     _TESTPARAM_C,
     _TESTPARAM_D,
     _TESTPARAM_E,
+    _TESTPARAM_F,
 ]
 
 
