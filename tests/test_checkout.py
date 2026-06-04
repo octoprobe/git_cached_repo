@@ -1,11 +1,27 @@
 """
 Checkout differnt repos, branches, tags and PR
 
- 3.9s [https://github.com/micropython/micropython.git]
-26.9s [https://github.com/micropython/micropython.git~17232]
- 4.1s [https://github.com/micropython/micropython.git@v1.25.0]
-91.5s [https://github.com/micropython/micropython.git@v1.25.0-SUBMODULES]
- 8.5s [https://github.com/micropython/micropython.git~17113@v1.25.0]
+$ pytest -s | grep duration_s
+
+01.2s git_bare=True https://github.com/micropython/micropython.git
+03.7s git_bare=False https://github.com/micropython/micropython.git
+
+05.3s git_bare=True https://github.com/micropython/micropython.git~17232
+06.4s git_bare=False https://github.com/micropython/micropython.git~17232
+
+04.1s git_bare=True https://github.com/micropython/micropython.git@f498a16
+07.2s git_bare=False https://github.com/micropython/micropython.git@f498a16
+
+03.9s git_bare=True https://github.com/micropython/micropython.git@v1.25.0
+04.4s git_bare=False https://github.com/micropython/micropython.git@v1.25.0
+
+90.9s git_bare=True https://github.com/micropython/micropython.git@v1.25.0-SUBMODULES
+158.9s git_bare=False https://github.com/micropython/micropython.git@v1.25.0-SUBMODULES
+
+06.9s git_bare=True https://github.com/micropython/micropython.git~17113@v1.25.0
+07.7s git_bare=False https://github.com/micropython/micropython.git~17113@v1.25.0
+
+Conclusion: There is a speedup on `https://github.com/micropython/micropython.git`. However when switching to a branch/tag/commit is not much faster.
 """
 
 from __future__ import annotations
@@ -88,7 +104,7 @@ _TESTPARAM_C = Ttestparam(
     expected_url_link="https://github.com/micropython/micropython/tree/f498a16",
     expected_commit_hash_short="f498a16",
     expected_rebased=False,
-    expected_command_describe="tags/v1.25.0-0-gf498a16c7d",
+    expected_command_describe="tags/v1.25.0-0-gf498a16c",
 )
 _TESTPARAM_D = Ttestparam(
     spec="https://github.com/micropython/micropython.git@v1.25.0",
@@ -135,7 +151,9 @@ def _test_checkout(testparam: Ttestparam, git_bare: bool) -> None:
     try:
         begin_s = time.monotonic()
         metadata = cache.clone(
-            git_clean=False, submodules=testparam.submodules, git_bare=git_bare
+            git_clean=False,
+            submodules=testparam.submodules,
+            git_bare=git_bare,
         )
         duration_s = time.monotonic() - begin_s
         print(f"{duration_s=:04.1f}s {git_bare=} {testparam.pytest_id}")

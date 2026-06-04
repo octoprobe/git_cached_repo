@@ -78,40 +78,13 @@ source-includes = [
 [tool.mypy]
 strict = true
 warn_unused_ignores = false
+exclude = [
+    "^tests/git_cache/",
+]
 
 [[tool.mypy.overrides]]
 module = ["typer.*"]
 ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "git_cached_repo.tests.*"
-ignore_missing_imports = true
-check_untyped_defs = true
-
-[[tool.mypy.overrides]]
-module = "pallets_sphinx_themes.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "serial.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "usb.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "pyudev.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "reportlab.*"
-ignore_missing_imports = true
-
-[[tool.mypy.overrides]]
-module = "mpremote.*"
-ignore_missing_imports = true
-check_untyped_defs = false
 
 [tool.pytest.ini_options]
 pythonpath = "src"
@@ -240,6 +213,11 @@ disable = '''
     unused-argument,
     using-constant-test,
 '''
+
+[tool.pylint.main]
+ignore-paths = [
+    "^tests/git_cache/.*$",
+]
 
 [tool.pylint]
 max-line-length = 88

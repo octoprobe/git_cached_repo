@@ -356,11 +356,13 @@ class CachedGitRepo:
         require_rebase = (self.git_spec.branch is not None) and (
             self.git_spec.pr is not None
         )
-        depth = self.GIT_DEPTH_DEEP if require_rebase else self.GIT_DEPTH_SHALLOW
+        shallow = not require_rebase
+        if self.git_spec.is_commit_hash:
+            shallow = False
         if git_bare:
             self._git_clone_bare()
         else:
-            self._git_clone(submodules=submodules, depth=depth)
+            self._git_clone(submodules=submodules, shallow=shallow)
 
         if git_bare:
             if self.git_spec.branch:
@@ -457,7 +459,7 @@ class CachedGitRepo:
             )
 
         metadata = self.get_metadata(
-            depth=depth,
+            shallow=shallow,
             rebased=require_rebase,
             commit_log_begin=commit_log_begin,
             commit_hash=commit_hash,
@@ -522,17 +524,18 @@ class CachedGitRepo:
             filename_config.read_text().replace("bare = true", "bare = false")
         )
 
-    def _git_clone(self, submodules: bool, depth: int) -> None:
+    def _git_clone(self, submodules: bool, shallow: bool) -> None:
         args = [
             "git",
             "clone",
-            f"--depth={depth}",
             "--filter=blob:none",
             "--jobs=8",
             "--quiet",
             self.git_spec.url,
             self.directory_git_work_repo.name,
         ]
+        if shallow:
+            args.append("--depth=1")
         if self.git_spec.is_branch:
             assert self.git_spec.branch is not None
             args.append(f"--branch={self.git_spec.branch}")
@@ -548,7 +551,7 @@ class CachedGitRepo:
 
     def get_metadata(
         self,
-        depth: int,
+        shallow: bool,
         rebased: bool,
         commit_log_begin: str | None,
         commit_hash: str | None,
@@ -556,7 +559,9 @@ class CachedGitRepo:
         assert isinstance(commit_log_begin, str)
         assert isinstance(commit_hash, str)
         command_describe = self.get_git_describe()
-        command_log = self.get_git_log(depth=depth, commit_log_begin=commit_log_begin)
+        command_log = self.get_git_log(
+            shallow=shallow, commit_log_begin=commit_log_begin
+        )
 
         return GitMetadata(
             git_spec=self.git_spec.git_spec,
@@ -589,7 +594,7 @@ class CachedGitRepo:
             stdout=git_describe,
         )
 
-    def get_git_log(self, depth: int, commit_log_begin: str) -> MetadataGitCommand:
+    def get_git_log(self, shallow: bool, commit_log_begin: str) -> MetadataGitCommand:
         """
         call 'git log' and concatinate the output.
         Example:
@@ -598,6 +603,7 @@ class CachedGitRepo:
             2c2f0b2 esp32: Re-use allocated timer interrupts and simplify UART timer code.
         Concatenations is triggered by ' (origin/'
         """
+        depth = self.GIT_DEPTH_SHALLOW if shallow else self.GIT_DEPTH_DEEP
         args = [
             "git",
             "log",
