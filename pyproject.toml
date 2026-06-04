@@ -115,6 +115,7 @@ check_untyped_defs = false
 
 [tool.pytest.ini_options]
 pythonpath = "src"
+log_level = "DEBUG"
 addopts = [
   # "-m", "not live",
   "--strict-config",

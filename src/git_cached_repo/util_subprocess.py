@@ -18,7 +18,7 @@ def subprocess_run(
     cwd: pathlib.Path,
     env: dict[str, str] | None = None,
     timeout_s: float = 10.0,
-) -> str | None:
+) -> str:
     """
     Wrappsr around 'subprocess()'
     """

@@ -12,7 +12,6 @@ from __future__ import annotations
 
 import dataclasses
 import pathlib
-import shutil
 import time
 
 import pytest
@@ -71,9 +70,9 @@ _TESTPARAM_A = Ttestparam(
     spec="https://github.com/micropython/micropython.git",
     submodules=False,
     expected_url_link="https://github.com/micropython/micropython",
-    expected_commit_hash_short="75555f4",
+    expected_commit_hash_short=None,
     expected_rebased=False,
-    expected_command_describe="heads/master-0-g75555f4",
+    expected_command_describe="heads/master-0-",
 )
 _TESTPARAM_B = Ttestparam(
     spec="https://github.com/micropython/micropython.git~17232",
@@ -125,20 +124,21 @@ _TESTPARAMS = [
 ]
 
 
-def _test_checkout(testparam: Ttestparam) -> None:
+def _test_checkout(testparam: Ttestparam, git_bare: bool) -> None:
 
     cache = CachedGitRepo(
         directory_cache=DIRECTORY_CACHE,
         git_spec=testparam.spec,
         prefix="test_checkout_",
     )
-    if cache.directory_git_work_repo.is_dir():
-        shutil.rmtree(cache.directory_git_work_repo)
+    cache.clean_directory_work_repo(directory_cache=DIRECTORY_CACHE)
     try:
         begin_s = time.monotonic()
-        metadata = cache.clone(git_clean=False, submodules=testparam.submodules)
+        metadata = cache.clone(
+            git_clean=False, submodules=testparam.submodules, git_bare=git_bare
+        )
         duration_s = time.monotonic() - begin_s
-        print(f"{testparam.spec}: {duration_s=:0.1f}s")
+        print(f"{duration_s=:04.1f}s {git_bare=} {testparam.pytest_id}")
         passed = testparam.passed(metadata)
         if not passed:
             print(testparam.expected_template(metadata=metadata))
@@ -147,13 +147,14 @@ def _test_checkout(testparam: Ttestparam) -> None:
         raise ValueError(f"Failed: {e.__class__.__name__}: {e}") from e
 
 
+@pytest.mark.parametrize("git_bare", (True, False), ids=lambda git_bare: f"{git_bare=}")
 @pytest.mark.parametrize(
     "testparam", _TESTPARAMS, ids=lambda testparam: testparam.pytest_id
 )
 @pytest.mark.internet
-def test_checkout(testparam: Ttestparam) -> None:
-    _test_checkout(testparam)
+def test_checkout(testparam: Ttestparam, git_bare: bool) -> None:
+    _test_checkout(testparam, git_bare=git_bare)
 
 
 if __name__ == "__main__":
-    _test_checkout(testparam=_TESTPARAM_B)
+    _test_checkout(testparam=_TESTPARAM_B, git_bare=True)

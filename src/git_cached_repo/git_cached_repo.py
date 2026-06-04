@@ -27,6 +27,7 @@ commands
 from __future__ import annotations
 
 import dataclasses
+import hashlib
 import json
 import logging
 import pathlib
@@ -39,6 +40,7 @@ import slugify
 from .util_subprocess import subprocess_run
 
 logger = logging.getLogger(__file__)
+
 GIT_CLONE_TIMEOUT_S = 240.0
 
 GIT_REF_SUFFIX_GIT = ".git"
@@ -308,6 +310,7 @@ class CachedGitRepo:
         # Example 'prefix': 'micropython_mpbuild_'
 
         self.prefix = prefix
+        self._directory_cache = directory_cache
         self._directory_work = directory_cache / subdir
         self.git_spec = GitSpec.parse(git_ref=git_spec)
 
@@ -335,7 +338,12 @@ class CachedGitRepo:
     def directory_git_work_repo(self) -> pathlib.Path:
         return self._directory_work / f"{self.prefix}{self.slugify}"
 
-    def clone(self, git_clean: bool, submodules: bool = False) -> GitMetadata:
+    def clone(
+        self,
+        git_clean: bool,
+        submodules: bool = False,
+        git_bare: bool = True,
+    ) -> GitMetadata:
         """
         Clone or update the git repo.
         """
@@ -345,50 +353,38 @@ class CachedGitRepo:
         self._directory_work.mkdir(parents=True, exist_ok=True)
 
         assert not self.directory_git_work_repo.is_dir(), self.directory_git_work_repo
-        # logger.debug(f"Remove directory: {self.directory_git_work_repo}")
-        # shutil.rmtree(self.directory_git_work_repo)
-
         require_rebase = (self.git_spec.branch is not None) and (
             self.git_spec.pr is not None
         )
         depth = self.GIT_DEPTH_DEEP if require_rebase else self.GIT_DEPTH_SHALLOW
-        args = [
-            "git",
-            "clone",
-            f"--depth={depth}",
-            "--filter=blob:none",
-            "--jobs=8",
-            "--quiet",
-            self.git_spec.url,
-            self.directory_git_work_repo.name,
-        ]
-        if self.git_spec.is_branch:
-            assert self.git_spec.branch is not None
-            args.append(f"--branch={self.git_spec.branch}")
-        if submodules:
-            args.extend(
-                [
-                    "--recurse-submodules",
-                    "--shallow-submodules",  # All submodules which are cloned will be shallow with a depth of 1.
-                ]
-            )
-        subprocess_run(
-            args=args,
-            cwd=self.directory_git_work_repo.parent,
-            timeout_s=GIT_CLONE_TIMEOUT_S,
-        )
+        if git_bare:
+            self._git_clone_bare()
+        else:
+            self._git_clone(submodules=submodules, depth=depth)
 
-        if self.git_spec.is_commit_hash:
-            assert self.git_spec.branch is not None
-            subprocess_run(
-                args=[
-                    "git",
-                    "checkout",
-                    self.git_spec.branch,
-                ],
-                cwd=self.directory_git_work_repo,
-                timeout_s=GIT_CLONE_TIMEOUT_S,
-            )
+        if git_bare:
+            if self.git_spec.branch:
+                subprocess_run(
+                    args=[
+                        "git",
+                        "checkout",
+                        self.git_spec.branch,
+                    ],
+                    cwd=self.directory_git_work_repo,
+                    timeout_s=GIT_CLONE_TIMEOUT_S,
+                )
+        else:
+            if self.git_spec.is_commit_hash:
+                assert self.git_spec.branch is not None
+                subprocess_run(
+                    args=[
+                        "git",
+                        "checkout",
+                        self.git_spec.branch,
+                    ],
+                    cwd=self.directory_git_work_repo,
+                    timeout_s=GIT_CLONE_TIMEOUT_S,
+                )
 
         commit_log_begin = commit_hash = subprocess_run(
             args=[
@@ -442,6 +438,24 @@ class CachedGitRepo:
                     timeout_s=GIT_CLONE_TIMEOUT_S,
                 )
 
+        if submodules:
+            # assert not submodules, "ENABLE_GIT_BARE: submodules are NOT supported!"
+            subprocess_run(
+                args=[
+                    "git",
+                    "submodule",
+                    "update",
+                    "--init",
+                    "--recursive",
+                    "--depth=1",
+                    "--jobs=8",
+                    # "--recurse-submodules",
+                    # "--shallow-submodules",  # All submodules which are cloned will be shallow with a depth of 1.
+                ],
+                cwd=self.directory_git_work_repo,
+                timeout_s=GIT_CLONE_TIMEOUT_S,
+            )
+
         metadata = self.get_metadata(
             depth=depth,
             rebased=require_rebase,
@@ -451,14 +465,86 @@ class CachedGitRepo:
         with self.filename_metadata.open("w") as f:
             json.dump(dataclasses.asdict(metadata), fp=f, indent=4, sort_keys=True)
 
-        def relative_cwd(d: pathlib.Path) -> str:
-            # TODO
-            return str(d)
-
         logger.info(
-            f"git clone {self.git_spec.git_spec} -> {relative_cwd(self.directory_git_work_repo)}"
+            f"git clone {self.git_spec.git_spec} -> {self.directory_git_work_repo}"
         )
         return metadata
+
+    def _git_clone_bare(self) -> None:
+        name_bare = hashlib.md5(self.git_spec.url.encode("ascii")).hexdigest()
+        directory_git_bare = self._directory_cache / "git-bare" / name_bare
+
+        # First clone --bare or fetch
+        if directory_git_bare.exists():
+            args = [
+                "git",
+                # Avoid error: safe.bareRepository is 'explicit'
+                f"--git-dir={directory_git_bare}",
+                "fetch",
+                "--prune",
+                "--all",
+                "--tags",
+                "--quiet",
+            ]
+            subprocess_run(
+                args=args,
+                cwd=self._directory_cache,
+                timeout_s=GIT_CLONE_TIMEOUT_S,
+            )
+        else:
+            args = [
+                "git",
+                "clone",
+                # "--bare",
+                "--mirror",
+                "--filter=blob:none",
+                "--jobs=8",
+                "--quiet",
+                self.git_spec.url,
+                str(directory_git_bare),
+            ]
+            subprocess_run(
+                args=args,
+                cwd=self._directory_cache,
+                timeout_s=GIT_CLONE_TIMEOUT_S,
+            )
+
+        # Filecopy the bar repo
+        self.directory_git_work_repo.mkdir(parents=True)
+        shutil.copytree(
+            src=directory_git_bare,
+            dst=self.directory_git_work_repo / ".git",
+        )
+
+        # Patch the config file
+        filename_config = self.directory_git_work_repo / ".git" / "config"
+        filename_config.write_text(
+            filename_config.read_text().replace("bare = true", "bare = false")
+        )
+
+    def _git_clone(self, submodules: bool, depth: int) -> None:
+        args = [
+            "git",
+            "clone",
+            f"--depth={depth}",
+            "--filter=blob:none",
+            "--jobs=8",
+            "--quiet",
+            self.git_spec.url,
+            self.directory_git_work_repo.name,
+        ]
+        if self.git_spec.is_branch:
+            assert self.git_spec.branch is not None
+            args.append(f"--branch={self.git_spec.branch}")
+        if submodules:
+            args.append("--recurse-submodules")
+            # All submodules which are cloned will be shallow with a depth of 1.
+            args.append("--shallow-submodules")
+        subprocess_run(
+            args=args,
+            cwd=self.directory_git_work_repo.parent,
+            timeout_s=GIT_CLONE_TIMEOUT_S,
+        )
 
     def get_metadata(
         self,
