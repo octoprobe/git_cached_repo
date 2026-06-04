@@ -1,57 +1,71 @@
 # git_cached_repo
-Cache a arbitrary number of git repost for fast access of branches, tags and PR's
 
-## Programming interface
+Cache an arbitrary number of Git repositories for fast access to branches, tags, commits, and pull requests.
+
+## Programming Interface
 
 ### GitSpec
 
-A commit should is defined in a one-liner.
+A checkout target is described in a single line:
 
-https://github.com/micropython/micropython.git **Checkout 'master'**\
-https://github.com/micropython/micropython.git@v1.25.0 **Checkout 'v1.25.0' (might be branch/hash/tag).**\
-https://github.com/micropython/micropython.git~17468 **Checkout PR '17468'. Valid PR numbers may be found on the github.com.**\
-https://github.com/micropython/micropython.git~17468@v1.25.0 **Checkout PR '17468' and try to rebase on 'v1.25.0'.**\
+- `https://github.com/micropython/micropython.git`\
+    Checkout the default branch.
+- `https://github.com/micropython/micropython.git@v1.25.0`\
+    Checkout a branch, tag, or commit hash.
+- `https://github.com/micropython/micropython.git~17468`\
+    Checkout pull request `17468`.
+- `https://github.com/micropython/micropython.git~17468@v1.25.0`\
+    Checkout pull request `17468` and rebase it onto `v1.25.0`.
 
-This is how to parse a string from above:
+Parse a spec:
 
 ```python
 GitSpec.parse("https://github.com/micropython/micropython.git~17468@v1.25.0")
 ```
 
-Github url's may be converted in above syntax using `parse_github`:
+You can also convert standard GitHub URLs into this syntax with `parse_github`:
 
-https://github.com/micropython/micropython/pull/17468/commits\
-https://github.com/micropython/micropython/commits/v1.25.0\
-https://github.com/micropython/micropython/commit/f498a16c7db6d4b2de200b3e0856528dfe0613c3#diff-69528cf7a1b680885089529ad7dd75caa165373a79f9d44cf32663215baebabf\
-https://github.com/micropython/micropython/tree/docs/library/bluetooth\
+* https://github.com/micropython/micropython/pull/17468/commits\
+* https://github.com/micropython/micropython/commits/v1.25.0\
+* https://github.com/micropython/micropython/commit/f498a16c7db6d4b2de200b3e0856528dfe0613c3#diff-69528cf7a1b680885089529ad7dd75caa165373a79f9d44cf32663215baebabf\
+* https://github.com/micropython/micropython/tree/docs/library/bluetooth\
 
 
 ```python
 GitSpec.parse_github("https://github.com/micropython/micropython/commits/v1.24-release/")
-# returns: https://github.com/micropython/micropython.git@v1.24-release
+# returns a GitSpec with git_spec:
+# "https://github.com/micropython/micropython.git@v1.24-release"
 ```
 
 ### CachedGitRepo
 
-Below code will clone the repo into a directory.
+This checks out the repo and returns metadata:
 
 ```python
-    cache = CachedGitRepo(
-        directory_cache=DIRECTORY_CACHE,
-        git_spec=https://github.com/micropython/micropython/commits/v1.24-release/,
-        prefix="test_checkout_",
-    )
-    cache.clean_directory_work_repo(directory_cache=DIRECTORY_CACHE)
-    metadata = cache.clone(
-        git_clean=False,
-        submodules=testparam.submodules,
-        git_bare=git_bare,
-    )
+cache = CachedGitRepo(
+    directory_cache=DIRECTORY_CACHE,
+    git_spec="https://github.com/micropython/micropython.git@v1.24-release",
+    prefix="test_checkout_",
+)
+
+cache.clean_directory_work_repo(directory_cache=DIRECTORY_CACHE)
+
+metadata = cache.clone(
+    git_clean=False,
+    submodules=False,
+    git_bare=True,
+)
 ```
 
 ### GitMetadata
 
-This class describes what was checked out.
+`GitMetadata` describes what was checked out, including:
+
+- `url_link`
+- `commit_hash`
+- `command_describe`
+- `command_log`
+- `rebased`
 
 Example PR: `https://github.com/micropython/micropython.git~17782`
 
@@ -77,22 +91,28 @@ Example PR: `https://github.com/micropython/micropython.git~17782`
     af38ee1 (BASE) (origin/master, origin/HEAD, master) samd/mphalport: Run events at least once in mp_hal_delay_ms.
     4e32820 nrf/mphalport: Run events at least once in mp_hal_delay_ms.
 
-Above output shows the commit: `7aed4bf`
+The log output shows:
 
-Above output shows the commits of the PR. The line `(HEAD -> pr-17782)` is the current state of the PR. The line `(BASE) (origin/master, origin/HEAD, master)` is where the PR diverts from `master`.
+- the current PR head (for example `(HEAD -> pr-17782)`)
+- the base commit (marked as `(BASE)`)
 
-The goal of the output is, that a developer may verify what is tested.
+The goal of the output is, that a developer may verify what is contained in the checkout.
 
-## Commands and logout
+## Logging and Debug Output
 
-In the debug output you find all git commands which where executed and their duration.
+The project logs executed Git commands and timing via `util_subprocess`.
+
+To enable DEBUG for these two modules only:
 
 ```python
+import logging
+from git_cached_repo import git_cached_repo, util_subprocess
+
 logging.getLogger(util_subprocess.__file__).setLevel(logging.DEBUG)
 logging.getLogger(git_cached_repo.__file__).setLevel(logging.DEBUG)
 ```
 
-Run all pytests with debug output:
+Run tests with console logging enabled:
 
 ```bash
 pytest -s --log-cli-level=DEBUG tests/test_checkout.py
@@ -110,8 +130,31 @@ DEBUG  util_subprocess.py:63   stdout: tags/v1.25.0-0-gf498a16c7d
 DEBUG  util_subprocess.py:64   stderr: 
 ```
 
-## Clone strategy
 
-A repo will first be cloned using `git clone --mirror`.
+### Test Markers
 
-Now the repo will be file copied and presented to the calling module. On this `repo git checkout` etc. will be applied.
+Tests that access real internet repositories are marked with `@pytest.mark.internet`.
+
+- Run all tests except internet tests:
+
+```bash
+pytest -m "not internet"
+```
+
+- Run internet tests only:
+
+```bash
+pytest -m "internet"
+```
+
+## Clone Strategy
+
+With `git_bare=True`, the repository is cached as a mirror (`git clone --mirror`) in `git_cache/git-bare/`.
+
+For each working checkout:
+
+1. The mirror is fetched/updated.
+2. The mirror is copied into a working repository.
+3. The working copy checks out branch/tag/commit/PR as requested.
+
+With `git_bare=False`, a direct non-bare clone is used.
